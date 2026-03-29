@@ -1,0 +1,48 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+.eggs/
+dist/
+build/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.env
+.env.*
+!.env.example
+venv/
+.venv/
+env/
+
+# mitmproxy 运行目录（证书等，由程序生成）
+config/mitm/
+
+# 代理改写审计日志（默认 REWRITE_AUDIT）
+rewrite_audit.log
+*.audit.log
+
+# 可选：本地私密配置（若你拆分出本地文件再取消注释）
+# config/mapping.local.json
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 测试 / 类型检查缓存
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/

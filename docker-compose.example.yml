@@ -1,0 +1,10 @@
+# 客户端访问 http://<宿主机>:8080；在 config/mapping.json 中配置 proxy.upstream（Jellyfin 地址）与 pathRules。
+# 首次使用：mkdir -p config && cp mapping.example.json config/mapping.json 后按需编辑。
+services:
+  playback-proxy:
+    build: .
+    image: jellyfin-playback-proxy:local
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config:/app/config
