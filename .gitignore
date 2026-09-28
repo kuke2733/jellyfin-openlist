@@ -21,6 +21,7 @@ venv/
 env/
 
 config/mitm/
+config/mapping.json
 rewrite_audit.log
 *.audit.log
 

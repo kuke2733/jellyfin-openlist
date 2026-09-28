@@ -36,7 +36,7 @@ python proxy/run.py
 
 ## 配置
 
-`config/mapping.json` 挂到容器内 `/app/config/mapping.json`。
+把 `config/mapping.example.json` 复制为 `config/mapping.json`，再挂到容器内 `/app/config/mapping.json`。
 
 ```json
 {

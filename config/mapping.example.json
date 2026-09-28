@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "proxy": {
+    "upstream": "http://192.168.1.10:8096"
+  },
+  "pathRulesCaseInsensitive": true,
+  "pathRules": [
+    {
+      "localPath": "/媒体库/电影",
+      "urlBase": "https://openlist.example:5244/d/媒体库/电影"
+    }
+  ]
+}
