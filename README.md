@@ -1,73 +1,96 @@
-# jellyfin-playback-proxy
+# jellyfin-openlist
 
-**HTTP 反向代理**：中间件 **对外端口固定 `8080`**，请求转发到 **`config/mapping.json` 里配置的 Jellyfin 地址**（`proxy.upstream`），返回体在经过 `PlaybackInfo` 时按 **`pathRules`** 把本地路径批量换成网盘/AList URL。
+<p align="center">
+  <a href="https://github.com/kuke2733/jellyfin-openlist"><img src="https://img.shields.io/badge/GitHub-kuke2733%2Fjellyfin--openlist-181717?logo=github&logoColor=white" alt="GitHub"></a>
+  &nbsp;
+  <a href="https://hub.docker.com/r/guyongbo/jellyfin-openlist"><img src="https://img.shields.io/badge/DockerHub-guyongbo%2Fjellyfin--openlist-2496ED?logo=docker&logoColor=white" alt="Docker Hub"></a>
+</p>
 
-全程 **明文 HTTP**，无需 mitm 证书。
+客户端把 Jellyfin 地址填成 `http://<本机>:8080`。请求转到 `config/mapping.json` 的 `proxy.upstream`。`PlaybackInfo` 里可直链、且命中 `pathRules` 的本地路径，会换成 OpenList 地址。
 
-实现：**mitmdump**（`reverse` 模式）+ **`addon.py`**；镜像基于 **python:slim** + `pip install mitmproxy`。
+## 运行
 
-## 工作流程
+```bash
+docker run --rm -p 8080:8080 -p 8081:8081 -v "$(pwd)/config:/app/config" guyongbo/jellyfin-openlist:latest
+```
 
-1. 客户端里 Jellyfin 服务器地址填 **`http://<中间件IP>:8080`**（不要直连 Jellyfin 端口）。
-2. **`run.py`** 固定监听 **8080**，`mitmdump --mode reverse:<upstream>` 的上游为 **`proxy.upstream`**。
-3. **`addon.py`** 改写 `PlaybackInfo` JSON；其它接口透传。
+```yaml
+services:
+  jellyfin-openlist:
+    image: guyongbo/jellyfin-openlist:latest
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - ./config:/app/config
+```
 
-## 配置文件 `config/mapping.json`
+配置页面是 `http://<本机>:8081`。
 
-路径：**`<项目>/config/mapping.json`**（容器内 **`/app/config/mapping.json`**，挂载 **`./config`**）。模板：**`mapping.example.json`**。
+Linux 上 `upstream` 写成 `http://host.docker.internal:8096` 时，加上 `--add-host=host.docker.internal:host-gateway`。
 
-### `proxy`（只需 Jellyfin 地址）
+```bash
+pip install -r proxy/requirements.txt
+python proxy/run.py
+```
+
+## 配置
+
+`config/mapping.json` 挂到容器内 `/app/config/mapping.json`。
+
+```json
+{
+  "version": 1,
+  "proxy": {
+    "upstream": "http://192.168.1.10:8096"
+  },
+  "pathRulesCaseInsensitive": true,
+  "pathRules": [
+    {
+      "localPath": "/媒体库/电影",
+      "urlBase": "https://openlist.example:5244/d/媒体库/电影"
+    }
+  ]
+}
+```
 
 | 字段 | 含义 |
 |------|------|
-| **`upstream`** | Jellyfin **完整 HTTP 根地址**，须含协议与端口，例如 **`http://jellyfin:8096`**、**`http://192.168.1.10:8096`**。 |
+| `proxy.upstream` | Jellyfin 的 HTTP 根地址。没写时用 `JELLYFIN_UPSTREAM`，默认 `http://127.0.0.1:8096`。在配置页保存后会重启反代。 |
+| `pathRules[].localPath` | 库内路径前缀，更长的优先。保存后热加载。 |
+| `pathRules[].urlBase` | OpenList 前缀，不要末尾斜杠。 |
+| `pathRulesCaseInsensitive` | 前缀比较是否忽略大小写。默认否。 |
 
-未写 **`upstream`** 时，可用环境变量 **`JELLYFIN_UPSTREAM`** 兜底（默认 `http://127.0.0.1:8096`）。
+## 改写
 
-### `pathRules`（播放地址改写）
+只处理返回 200 的 `GET`/`POST` `/Items/{id}/PlaybackInfo`。媒体源需同时满足：
 
-`localPath` ↔ `urlBase`；更长 `localPath` 优先。
+- `SupportsDirectPlay` 为 `true`
+- `Path` 是本地路径，并落在某条 `localPath` 下
+- `Protocol` 还不是网络协议
 
-### `Host` 头
+改写后 `Path` 为 OpenList 地址，`Protocol` 为 `Http`，`IsRemote` 为 `true`，`SupportsDirectStream` 为 `true`，`SupportsTranscoding` 为 `false`。没有命中的源保持原样。
 
-默认把请求 **`Host`** 改为 **`upstream` 的主机名与端口**；关闭请设 **`PROXY_FIX_HOST_HEADER=0`**。
+改写记录追加到 `rewrite_audit.log`。
 
-## 构建与运行
+## 环境变量
 
-```bash
-cd jellyfin-playback-proxy
-mkdir -p config && cp mapping.example.json config/mapping.json
-# 编辑 config/mapping.json：至少设置 proxy.upstream
-docker build -t jellyfin-playback-proxy:local .
-docker run --rm \
-  -p 8080:8080 \
-  -v "$(pwd)/config:/app/config" \
-  jellyfin-playback-proxy:local
-```
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `MAPPING_FILE` | `<程序目录>/config/mapping.json` | 映射文件 |
+| `JELLYFIN_UPSTREAM` | `http://127.0.0.1:8096` | `proxy.upstream` 未配置时的地址 |
+| `MAPPING_RELOAD` | 开 | 热加载 `pathRules` |
+| `PROXY_FIX_HOST_HEADER` | 开 | 把 `Host` 改成上游主机名和端口 |
+| `MITM_CONFDIR` | `<程序目录>/config/mitm` | mitmproxy 配置目录 |
+| `REWRITE_AUDIT` | 开 | 写改写记录 |
+| `REWRITE_AUDIT_FILE` | `<程序目录>/rewrite_audit.log` | 记录文件 |
+| `CONFIG_PORT` | `8081` | 配置页面端口 |
 
-Compose 见 **`docker-compose.example.yml`**。
+## 源码
 
-- Linux 使用 **`http://host.docker.internal:8096`** 时，可加 **`--add-host=host.docker.internal:host-gateway`**，或改为宿主机 IP。
-
-## 可选环境变量
-
-| 变量 | 说明 |
-|------|------|
-| `MAPPING_FILE` | 默认 `<脚本目录>/config/mapping.json` |
-| `MITM_CONFDIR` | 默认 `<脚本目录>/config/mitm` |
-| `JELLYFIN_UPSTREAM` | mapping 未写 `proxy.upstream` 时兜底 |
-| `MAPPING_RELOAD` | 默认 `1`：热加载 pathRules（**改 upstream 须重启容器**） |
-| `PROXY_FIX_HOST_HEADER` | 默认 `1` |
-
-## 本地调试
+`proxy/` 是反向代理和配置页，`web/` 是配置页面。`jellyfin/` 指向 [jellyfin/jellyfin](https://github.com/jellyfin/jellyfin)。
 
 ```bash
-pip install -r requirements.txt
-mkdir -p config && cp mapping.example.json config/mapping.json
-python run.py
+git clone --recurse-submodules <仓库地址>
+git submodule update --init
 ```
-
-## 限制
-
-- 仅改写 **PlaybackInfo**。
-- 上游与客户端均为 **HTTP**。

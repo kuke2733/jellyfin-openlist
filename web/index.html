@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>jellyfin-openlist</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main>
+    <header class="top">
+      <h1>jellyfin<span>-</span>openlist</h1>
+      <nav class="links">
+        <a href="https://github.com/kuke2733/jellyfin-openlist" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/GitHub-jellyfin--openlist-181717?logo=github&logoColor=white" alt="GitHub"></a>
+        <a href="https://hub.docker.com/r/guyongbo/jellyfin-openlist" target="_blank" rel="noreferrer"><img src="https://img.shields.io/badge/DockerHub-jellyfin--openlist-2496ED?logo=docker&logoColor=white" alt="Docker Hub"></a>
+      </nav>
+    </header>
+    <form id="form">
+      <label class="field">
+        <span>上游地址</span>
+        <input id="upstream" name="upstream" autocomplete="off" spellcheck="false" placeholder="http://192.168.1.10:8096" required>
+      </label>
+
+      <div class="rules-head">
+        <h2>路径规则</h2>
+        <button type="button" id="add" class="ghost">添加</button>
+      </div>
+      <div id="rules"></div>
+      <p id="empty" class="empty" hidden>还没有路径规则</p>
+
+      <label class="check">
+        <input id="ignore-case" type="checkbox">
+        <span>路径前缀忽略大小写</span>
+      </label>
+
+      <div class="actions">
+        <button type="submit" id="save">保存</button>
+        <p id="status" role="status"></p>
+      </div>
+    </form>
+  </main>
+  <script src="/main.js"></script>
+</body>
+</html>
