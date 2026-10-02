@@ -152,6 +152,13 @@ def _file_mtime(path: Path) -> float | None:
         return None
 
 
+def _playback(flow: http.HTTPFlow) -> re.Match[str] | None:
+    if flow.request.method.upper() not in {"GET", "POST"}:
+        return None
+    path = flow.request.path.split("?", 1)[0]
+    return _PLAYBACK.search(path)
+
+
 class PlaybackRewrite:
     def __init__(self) -> None:
         self._path = mapping_path()
@@ -170,25 +177,29 @@ class PlaybackRewrite:
             self._mapping = load_mapping(self._path)
             return self._mapping
 
-    def request(self, flow: http.HTTPFlow) -> None:
+    def requestheaders(self, flow: http.HTTPFlow) -> None:
         # Jellyfin 会用请求里的 Host 拼一些绝对地址。改成上游，避免指回这个代理。
-        if not enabled("PROXY_FIX_HOST_HEADER", True):
+        # 放在 requestheaders 里，后面开启流式转发时请求头也已经改完。
+        if enabled("PROXY_FIX_HOST_HEADER", True):
+            mapping = self._current()
+            if mapping.host is not None and mapping.port is not None:
+                flow.request.host = mapping.host
+                flow.request.port = mapping.port
+        # 请求体不用改，边收边转发，避免把上传内容整段留在内存里。
+        flow.request.stream = True
+
+    def responseheaders(self, flow: http.HTTPFlow) -> None:
+        response = flow.response
+        if response is None or response.status_code == 101 or _playback(flow) is not None:
             return
-        mapping = self._current()
-        if mapping.host is None or mapping.port is None:
-            return
-        flow.request.host = mapping.host
-        flow.request.port = mapping.port
+        # 图片、视频和其他接口不改内容，直接流转发，不再把整段响应放进内存。
+        response.stream = True
 
     def response(self, flow: http.HTTPFlow) -> None:
         response = flow.response
         if response is None or response.status_code != 200:
             return
-        if flow.request.method.upper() not in {"GET", "POST"}:
-            return
-
-        path = flow.request.path.split("?", 1)[0]
-        matched = _PLAYBACK.search(path)
+        matched = _playback(flow)
         if matched is None:
             return
 
